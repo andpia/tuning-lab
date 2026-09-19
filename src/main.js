@@ -123,9 +123,19 @@ const selectPreset = (presetId) => {
 }
 
 const updateFrequency = (noteId, nextFrequency) => {
-  state.notes = state.notes.map((note) =>
-    note.id === noteId ? { ...note, frequency: Number(nextFrequency.toFixed(2)) } : note,
-  )
+  const isTonicEdit = noteId === tonicNote().id
+
+  state.notes = state.notes.map((note) => {
+    if (isTonicEdit) {
+      return {
+        ...note,
+        frequency: Number((nextFrequency * note.presetRatioValue).toFixed(2)),
+      }
+    }
+
+    return note.id === noteId ? { ...note, frequency: Number(nextFrequency.toFixed(2)) } : note
+  })
+
   setStatus(`Frequenza aggiornata per ${noteId}: ${nextFrequency.toFixed(2)} Hz.`)
   syncFrequencyUi()
 }
@@ -374,6 +384,22 @@ const syncFrequencyUi = () => {
   }
 }
 
+const applyFrequencyInput = (input, { resetOnInvalid = false } = {}) => {
+  const nextValue = Number.parseFloat(input.value)
+
+  if (!Number.isFinite(nextValue) || nextValue <= 0) {
+    if (resetOnInvalid) {
+      input.value = formatFrequency(findNoteById(input.dataset.noteId).frequency)
+      setStatus('Inserisci una frequenza valida maggiore di zero.')
+    }
+
+    return false
+  }
+
+  updateFrequency(input.dataset.noteId, nextValue)
+  return true
+}
+
 const handleAction = async (action, trigger) => {
   if (action === 'play-note') {
     const note = findNoteById(trigger.dataset.noteId)
@@ -455,15 +481,7 @@ app.addEventListener('change', (event) => {
   }
 
   if (trigger.matches('[data-role="frequency-input"]')) {
-    const nextValue = Number.parseFloat(trigger.value)
-
-    if (!Number.isFinite(nextValue) || nextValue <= 0) {
-      trigger.value = formatFrequency(findNoteById(trigger.dataset.noteId).frequency)
-      setStatus('Inserisci una frequenza valida maggiore di zero.')
-      return
-    }
-
-    updateFrequency(trigger.dataset.noteId, nextValue)
+    applyFrequencyInput(trigger, { resetOnInvalid: true })
   }
 })
 
@@ -474,13 +492,7 @@ app.addEventListener('input', (event) => {
     return
   }
 
-  const nextValue = Number.parseFloat(trigger.value)
-
-  if (!Number.isFinite(nextValue) || nextValue <= 0) {
-    return
-  }
-
-  updateFrequency(trigger.dataset.noteId, nextValue)
+  applyFrequencyInput(trigger)
 })
 
 renderApp()

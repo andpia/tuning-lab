@@ -104,6 +104,14 @@ export class AudioEngine {
       return
     }
 
+    try {
+      await this.ensureContext()
+    } catch {
+      this.currentSequenceToken = null
+      this.onPlaybackStateChange(false)
+      return
+    }
+
     const sequenceToken = Symbol('sequence')
     this.currentSequenceToken = sequenceToken
     this.onPlaybackStateChange(true)
@@ -114,7 +122,11 @@ export class AudioEngine {
           return
         }
 
-        this.playNote(note, { duration: stepDuration + 0.06 })
+        this.playNote(note, { duration: stepDuration + 0.06 }).catch(() => {
+          if (this.currentSequenceToken === sequenceToken) {
+            this.stopSequence()
+          }
+        })
 
         if (index === notes.length - 1) {
           const completionTimer = setTimeout(() => {
