@@ -67,7 +67,7 @@ const setStatus = (message) => {
 const resetPreset = () => {
   state.notes = buildNotesFromPreset(currentPreset())
   setStatus(`Preset ${currentPreset().name} ripristinato.`)
-  renderInteractiveAreas()
+  renderApp()
 }
 
 const selectPreset = (presetId) => {
@@ -83,7 +83,7 @@ const updateFrequency = (noteId, nextFrequency) => {
     note.id === noteId ? { ...note, frequency: Number(nextFrequency.toFixed(2)) } : note,
   )
   setStatus(`Frequenza aggiornata per ${noteId}: ${nextFrequency.toFixed(2)} Hz.`)
-  renderInteractiveAreas()
+  renderApp()
 }
 
 const keyboardMarkup = () => {
