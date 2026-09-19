@@ -62,6 +62,11 @@ const setStatus = (message) => {
   if (statusNode) {
     statusNode.textContent = message
   }
+
+  const stateLabel = document.querySelector('[data-role="playback-label"]')
+  if (stateLabel) {
+    stateLabel.textContent = state.isPlaying ? 'Riproduzione in corso' : 'In attesa'
+  }
 }
 
 const resetPreset = () => {
@@ -100,6 +105,7 @@ const keyboardMarkup = () => {
               <button
                 class="key key--white ${isActive ? 'is-active' : ''}"
                 data-action="play-note"
+                data-keyboard-key="true"
                 data-note-id="${note.id}"
                 type="button"
               >
@@ -118,6 +124,7 @@ const keyboardMarkup = () => {
               <button
                 class="key key--black ${isActive ? 'is-active' : ''}"
                 data-action="play-note"
+                data-keyboard-key="true"
                 data-note-id="${note.id}"
                 type="button"
                 style="left: calc(${note.leftOffset} * var(--white-key-width));"
@@ -218,7 +225,7 @@ const overviewMarkup = () => `
       </article>
       <article>
         <span class="eyebrow">Stato</span>
-        <strong>${state.isPlaying ? 'Riproduzione in corso' : 'In attesa'}</strong>
+        <strong data-role="playback-label">${state.isPlaying ? 'Riproduzione in corso' : 'In attesa'}</strong>
         <p data-role="status">${state.status}</p>
       </article>
     </div>
@@ -295,101 +302,53 @@ const studioMarkup = () => `
   </section>
 `
 
-const bindEvents = () => {
-  document.querySelector('[data-role="preset-select"]').addEventListener('change', (event) => {
-    selectPreset(event.target.value)
-  })
-
-  document.querySelector('[data-role="scale-select"]').addEventListener('change', (event) => {
-    state.selectedScaleId = event.target.value
-    setStatus(`Scala attiva: ${getScaleById(event.target.value).name}.`)
-    renderInteractiveAreas()
-  })
-
-  document.querySelectorAll('[data-action="play-note"]').forEach((button) => {
-    button.addEventListener('click', async () => {
-      const note = findNoteById(button.dataset.noteId)
-      await audioEngine.playNote(note)
-      setStatus(`Riproduzione di ${note.id} a ${formatFrequency(note.frequency)} Hz.`)
-    })
-  })
-
-  document.querySelector('[data-action="play-scale"]').addEventListener('click', async () => {
-    const notes = getScaleNotes()
-    await audioEngine.playSequence(notes)
-    setStatus(`Riproduzione della ${currentScale().name} in salita.`)
-  })
-
-  document.querySelector('[data-action="play-scale-desc"]').addEventListener('click', async () => {
-    const notes = [...getScaleNotes()].reverse()
-    await audioEngine.playSequence(notes)
-    setStatus(`Riproduzione della ${currentScale().name} in discesa.`)
-  })
-
-  document.querySelector('[data-action="play-chord"]').addEventListener('click', async () => {
-    const notes = getTriadNotes()
-    await audioEngine.playChord(notes)
-    setStatus(`Riproduzione dell'accordo costruito sulla ${currentScale().name}.`)
-  })
-
-  document.querySelector('[data-action="stop-playback"]').addEventListener('click', () => {
-    audioEngine.stopAll()
-    setStatus('Riproduzione interrotta.')
-  })
-
-  document.querySelector('[data-action="reset-preset"]').addEventListener('click', () => {
-    audioEngine.stopAll()
-    resetPreset()
-  })
-
-  document.querySelectorAll('[data-role="frequency-input"]').forEach((input) => {
-    input.addEventListener('change', (event) => {
-      const nextValue = Number.parseFloat(event.target.value)
-
-      if (!Number.isFinite(nextValue) || nextValue <= 0) {
-        event.target.value = formatFrequency(findNoteById(input.dataset.noteId).frequency)
-        setStatus('Inserisci una frequenza valida maggiore di zero.')
-        return
-      }
-
-      updateFrequency(input.dataset.noteId, nextValue)
-    })
+const syncKeyboardState = () => {
+  document.querySelectorAll('[data-keyboard-key="true"]').forEach((button) => {
+    button.classList.toggle('is-active', state.activeNoteIds.has(button.dataset.noteId))
   })
 }
 
-const renderInteractiveAreas = () => {
-  const workspaceNode = document.querySelector('[data-role="workspace"]')
-  const controlsNode = document.querySelector('[data-role="controls"]')
-
-  if (controlsNode) {
-    controlsNode.innerHTML = controlsMarkup()
+const handleAction = async (action, trigger) => {
+  if (action === 'play-note') {
+    const note = findNoteById(trigger.dataset.noteId)
+    await audioEngine.playNote(note)
+    setStatus(`Riproduzione di ${note.id} a ${formatFrequency(note.frequency)} Hz.`)
+    return
   }
 
-  if (workspaceNode) {
-    workspaceNode.innerHTML = studioMarkup()
+  if (action === 'play-scale') {
+    await audioEngine.playSequence(getScaleNotes())
+    setStatus(`Riproduzione della ${currentScale().name} in salita.`)
+    return
   }
 
-  bindEvents()
+  if (action === 'play-scale-desc') {
+    await audioEngine.playSequence([...getScaleNotes()].reverse())
+    setStatus(`Riproduzione della ${currentScale().name} in discesa.`)
+    return
+  }
+
+  if (action === 'play-chord') {
+    await audioEngine.playChord(getTriadNotes())
+    setStatus(`Riproduzione dell'accordo costruito sulla ${currentScale().name}.`)
+    return
+  }
+
+  if (action === 'stop-playback') {
+    audioEngine.stopAll()
+    setStatus('Riproduzione interrotta.')
+    return
+  }
+
+  if (action === 'reset-preset') {
+    audioEngine.stopAll()
+    resetPreset()
+  }
 }
 
 const updateDynamicUi = () => {
-  const statusNode = document.querySelector('[data-role="status"]')
-  const stateLabel = document.querySelector('.info-grid article:last-child strong')
-
-  if (statusNode) {
-    statusNode.textContent = state.status
-  }
-
-  if (stateLabel) {
-    stateLabel.textContent = state.isPlaying ? 'Riproduzione in corso' : 'In attesa'
-  }
-
-  const keyboardNode = document.querySelector('.keyboard-panel')
-  const tableNode = document.querySelector('.editor-panel')
-
-  if (keyboardNode && tableNode) {
-    renderInteractiveAreas()
-  }
+  setStatus(state.status)
+  syncKeyboardState()
 }
 
 const renderApp = () => {
@@ -399,7 +358,45 @@ const renderApp = () => {
     <div data-role="workspace">${studioMarkup()}</div>
   `
 
-  bindEvents()
+  updateDynamicUi()
 }
+
+app.addEventListener('click', async (event) => {
+  const trigger = event.target.closest('[data-action]')
+
+  if (!trigger) {
+    return
+  }
+
+  await handleAction(trigger.dataset.action, trigger)
+})
+
+app.addEventListener('change', (event) => {
+  const trigger = event.target
+
+  if (trigger.matches('[data-role="preset-select"]')) {
+    selectPreset(trigger.value)
+    return
+  }
+
+  if (trigger.matches('[data-role="scale-select"]')) {
+    state.selectedScaleId = trigger.value
+    setStatus(`Scala attiva: ${getScaleById(trigger.value).name}.`)
+    renderApp()
+    return
+  }
+
+  if (trigger.matches('[data-role="frequency-input"]')) {
+    const nextValue = Number.parseFloat(trigger.value)
+
+    if (!Number.isFinite(nextValue) || nextValue <= 0) {
+      trigger.value = formatFrequency(findNoteById(trigger.dataset.noteId).frequency)
+      setStatus('Inserisci una frequenza valida maggiore di zero.')
+      return
+    }
+
+    updateFrequency(trigger.dataset.noteId, nextValue)
+  }
+})
 
 renderApp()
