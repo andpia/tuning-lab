@@ -37,6 +37,9 @@ const audioEngine = new AudioEngine({
     state.isPlaying = isPlaying
     updateDynamicUi()
   },
+  onError(message) {
+    setStatus(message)
+  },
 })
 
 const findNoteById = (noteId) => state.notes.find((note) => note.id === noteId)
@@ -124,12 +127,13 @@ const selectPreset = (presetId) => {
 
 const updateFrequency = (noteId, nextFrequency) => {
   const isTonicEdit = noteId === tonicNote().id
+  const previousTonicFrequency = tonicNote().frequency
 
   state.notes = state.notes.map((note) => {
     if (isTonicEdit) {
       return {
         ...note,
-        frequency: Number((nextFrequency * note.presetRatioValue).toFixed(2)),
+        frequency: Number(((nextFrequency * note.frequency) / previousTonicFrequency).toFixed(2)),
       }
     }
 
@@ -226,7 +230,7 @@ const noteTableMarkup = () => `
           <th>Rapporto preset</th>
           <th>Rapporto corrente</th>
           <th>Frequenza (Hz)</th>
-          <th></th>
+          <th>Azione</th>
         </tr>
       </thead>
       <tbody>
@@ -402,27 +406,43 @@ const applyFrequencyInput = (input, { resetOnInvalid = false } = {}) => {
 
 const handleAction = async (action, trigger) => {
   if (action === 'play-note') {
-    const note = findNoteById(trigger.dataset.noteId)
-    await audioEngine.playNote(note)
-    setStatus(`Riproduzione di ${note.id} a ${formatFrequency(note.frequency)} Hz.`)
+    try {
+      const note = findNoteById(trigger.dataset.noteId)
+      await audioEngine.playNote(note)
+      setStatus(`Riproduzione di ${note.id} a ${formatFrequency(note.frequency)} Hz.`)
+    } catch {
+      setStatus('Riproduzione non disponibile. Controlla i permessi audio del browser e riprova.')
+    }
     return
   }
 
   if (action === 'play-scale') {
-    await audioEngine.playSequence(getScaleNotes())
-    setStatus(`Riproduzione della ${currentScale().name} in salita.`)
+    try {
+      await audioEngine.playSequence(getScaleNotes())
+      setStatus(`Riproduzione della ${currentScale().name} in salita.`)
+    } catch {
+      setStatus('Riproduzione non disponibile. Controlla i permessi audio del browser e riprova.')
+    }
     return
   }
 
   if (action === 'play-scale-desc') {
-    await audioEngine.playSequence([...getScaleNotes()].reverse())
-    setStatus(`Riproduzione della ${currentScale().name} in discesa.`)
+    try {
+      await audioEngine.playSequence([...getScaleNotes()].reverse())
+      setStatus(`Riproduzione della ${currentScale().name} in discesa.`)
+    } catch {
+      setStatus('Riproduzione non disponibile. Controlla i permessi audio del browser e riprova.')
+    }
     return
   }
 
   if (action === 'play-chord') {
-    await audioEngine.playChord(getTriadNotes())
-    setStatus(`Riproduzione dell'accordo costruito sulla ${currentScale().name}.`)
+    try {
+      await audioEngine.playChord(getTriadNotes())
+      setStatus(`Riproduzione dell'accordo costruito sulla ${currentScale().name}.`)
+    } catch {
+      setStatus('Riproduzione non disponibile. Controlla i permessi audio del browser e riprova.')
+    }
     return
   }
 

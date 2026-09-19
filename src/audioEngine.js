@@ -1,5 +1,8 @@
+const AUDIO_INIT_ERROR =
+  'Impossibile avviare l’audio. Verifica che il browser supporti la Web Audio API e riprova.'
+
 export class AudioEngine {
-  constructor({ onNoteStateChange, onPlaybackStateChange } = {}) {
+  constructor({ onNoteStateChange, onPlaybackStateChange, onError } = {}) {
     this.audioContext = null
     this.masterGain = null
     this.voices = new Map()
@@ -8,6 +11,7 @@ export class AudioEngine {
     this.currentSequenceToken = null
     this.onNoteStateChange = onNoteStateChange ?? (() => {})
     this.onPlaybackStateChange = onPlaybackStateChange ?? (() => {})
+    this.onError = onError ?? (() => {})
   }
 
   async ensureContext() {
@@ -55,7 +59,15 @@ export class AudioEngine {
   }
 
   async playNote(note, { duration = 1.1, waveform = 'triangle' } = {}) {
-    const context = await this.ensureContext()
+    let context
+
+    try {
+      context = await this.ensureContext()
+    } catch {
+      this.onError(AUDIO_INIT_ERROR)
+      throw new Error(AUDIO_INIT_ERROR)
+    }
+
     const oscillator = context.createOscillator()
     const gainNode = context.createGain()
     const now = context.currentTime
@@ -109,6 +121,7 @@ export class AudioEngine {
     } catch {
       this.currentSequenceToken = null
       this.onPlaybackStateChange(false)
+      this.onError(AUDIO_INIT_ERROR)
       return
     }
 
