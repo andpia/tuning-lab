@@ -12,6 +12,8 @@ Applicazione web per esplorare i sistemi di intonazione musicali con la Web Audi
 
 ## Sviluppo locale
 
+Richiede Node.js `^20.19.0` oppure `>=22.12.0`.
+
 ```bash
 npm install
 npm run dev

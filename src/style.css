@@ -59,8 +59,14 @@ button:hover,
 button:focus-visible,
 select:focus-visible,
 input:focus-visible {
-  outline: none;
   transform: translateY(-1px);
+}
+
+button:focus-visible,
+select:focus-visible,
+input:focus-visible {
+  outline: 3px solid #f8fafc;
+  outline-offset: 3px;
 }
 
 button.secondary,

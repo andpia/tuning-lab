@@ -108,6 +108,7 @@ const restoreFocus = (focusSnapshot) => {
 }
 
 const resetPreset = () => {
+  audioEngine.stopAll()
   state.notes = buildNotesFromPreset(currentPreset())
   setStatus(`Preset ${currentPreset().name} ripristinato.`)
   renderApp()
@@ -406,7 +407,6 @@ const handleAction = async (action, trigger) => {
   }
 
   if (action === 'reset-preset') {
-    audioEngine.stopAll()
     resetPreset()
   }
 }
