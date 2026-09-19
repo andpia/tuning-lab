@@ -69,6 +69,44 @@ const setStatus = (message) => {
   }
 }
 
+const captureFocus = () => {
+  const activeElement = document.activeElement
+
+  if (!activeElement || !activeElement.dataset?.role) {
+    return null
+  }
+
+  return {
+    role: activeElement.dataset.role,
+    noteId: activeElement.dataset.noteId ?? null,
+    selectionStart:
+      typeof activeElement.selectionStart === 'number' ? activeElement.selectionStart : null,
+    selectionEnd:
+      typeof activeElement.selectionEnd === 'number' ? activeElement.selectionEnd : null,
+  }
+}
+
+const restoreFocus = (focusSnapshot) => {
+  if (!focusSnapshot) {
+    return
+  }
+
+  const noteSelector = focusSnapshot.noteId
+    ? `[data-role="${focusSnapshot.role}"][data-note-id="${focusSnapshot.noteId}"]`
+    : `[data-role="${focusSnapshot.role}"]`
+  const nextElement = document.querySelector(noteSelector)
+
+  if (!nextElement) {
+    return
+  }
+
+  nextElement.focus()
+
+  if (focusSnapshot.selectionStart !== null && typeof nextElement.setSelectionRange === 'function') {
+    nextElement.setSelectionRange(focusSnapshot.selectionStart, focusSnapshot.selectionEnd)
+  }
+}
+
 const resetPreset = () => {
   state.notes = buildNotesFromPreset(currentPreset())
   setStatus(`Preset ${currentPreset().name} ripristinato.`)
@@ -80,7 +118,7 @@ const selectPreset = (presetId) => {
   state.selectedPresetId = presetId
   state.notes = buildNotesFromPreset(getPresetById(presetId))
   setStatus(`Preset attivo: ${getPresetById(presetId).name}.`)
-  renderApp()
+  renderApp({ preserveFocus: true })
 }
 
 const updateFrequency = (noteId, nextFrequency) => {
@@ -88,7 +126,7 @@ const updateFrequency = (noteId, nextFrequency) => {
     note.id === noteId ? { ...note, frequency: Number(nextFrequency.toFixed(2)) } : note,
   )
   setStatus(`Frequenza aggiornata per ${noteId}: ${nextFrequency.toFixed(2)} Hz.`)
-  renderApp()
+  syncFrequencyUi()
 }
 
 const keyboardMarkup = () => {
@@ -110,7 +148,7 @@ const keyboardMarkup = () => {
                 type="button"
               >
                 <span>${note.label}</span>
-                <small>${formatFrequency(findNoteById(note.id).frequency)} Hz</small>
+                <small data-role="key-frequency" data-note-id="${note.id}">${formatFrequency(findNoteById(note.id).frequency)} Hz</small>
               </button>
             `
           })
@@ -141,6 +179,10 @@ const keyboardMarkup = () => {
 
 const scaleMarkup = () => {
   const notes = getScaleNotes()
+  const noteList = notes.map((note) => note.id).join(', ')
+  const chordList = getTriadNotes()
+    .map((note) => note.id)
+    .join(', ')
 
   return `
     <div class="scale-card">
@@ -150,9 +192,15 @@ const scaleMarkup = () => {
         <p>${notes.map((note) => note.label).join(' · ')}</p>
       </div>
       <div class="scale-actions">
-        <button type="button" class="secondary" data-action="play-scale">Riproduci scala</button>
-        <button type="button" class="secondary" data-action="play-scale-desc">Riproduci al contrario</button>
-        <button type="button" class="secondary" data-action="play-chord">Accordo semplice</button>
+        <button type="button" class="secondary" data-action="play-scale" aria-label="Riproduci ${currentScale().name}: ${noteList}">
+          Riproduci scala
+        </button>
+        <button type="button" class="secondary" data-action="play-scale-desc" aria-label="Riproduci ${currentScale().name} al contrario: ${[...notes].reverse().map((note) => note.id).join(', ')}">
+          Riproduci al contrario
+        </button>
+        <button type="button" class="secondary" data-action="play-chord" aria-label="Riproduci accordo semplice: ${chordList}">
+          Accordo semplice
+        </button>
       </div>
     </div>
   `
@@ -177,7 +225,7 @@ const noteTableMarkup = () => `
               <tr>
                 <th scope="row">${note.id}</th>
                 <td>${note.presetRatioLabel}</td>
-                <td>${formatRatio(ratioFromTonic(note.frequency))}</td>
+                <td data-role="current-ratio" data-note-id="${note.id}">${formatRatio(ratioFromTonic(note.frequency))}</td>
                 <td>
                   <label class="sr-only" for="freq-${note.id}">Frequenza ${note.id}</label>
                   <input
@@ -221,7 +269,7 @@ const overviewMarkup = () => `
       <article>
         <span class="eyebrow">Tonica</span>
         <strong>${tonicNote().id}</strong>
-        <p>${formatFrequency(tonicNote().frequency)} Hz</p>
+        <p data-role="tonic-frequency">${formatFrequency(tonicNote().frequency)} Hz</p>
       </article>
       <article>
         <span class="eyebrow">Stato</span>
@@ -308,6 +356,23 @@ const syncKeyboardState = () => {
   })
 }
 
+const syncFrequencyUi = () => {
+  document.querySelectorAll('[data-role="current-ratio"]').forEach((ratioNode) => {
+    const note = findNoteById(ratioNode.dataset.noteId)
+    ratioNode.textContent = formatRatio(ratioFromTonic(note.frequency))
+  })
+
+  document.querySelectorAll('[data-role="key-frequency"]').forEach((frequencyNode) => {
+    const note = findNoteById(frequencyNode.dataset.noteId)
+    frequencyNode.textContent = `${formatFrequency(note.frequency)} Hz`
+  })
+
+  const tonicFrequencyNode = document.querySelector('[data-role="tonic-frequency"]')
+  if (tonicFrequencyNode) {
+    tonicFrequencyNode.textContent = `${formatFrequency(tonicNote().frequency)} Hz`
+  }
+}
+
 const handleAction = async (action, trigger) => {
   if (action === 'play-note') {
     const note = findNoteById(trigger.dataset.noteId)
@@ -351,7 +416,9 @@ const updateDynamicUi = () => {
   syncKeyboardState()
 }
 
-const renderApp = () => {
+const renderApp = ({ preserveFocus = false } = {}) => {
+  const focusSnapshot = preserveFocus ? captureFocus() : null
+
   app.innerHTML = `
     ${overviewMarkup()}
     <div data-role="controls">${controlsMarkup()}</div>
@@ -359,6 +426,7 @@ const renderApp = () => {
   `
 
   updateDynamicUi()
+  restoreFocus(focusSnapshot)
 }
 
 app.addEventListener('click', async (event) => {
@@ -382,7 +450,7 @@ app.addEventListener('change', (event) => {
   if (trigger.matches('[data-role="scale-select"]')) {
     state.selectedScaleId = trigger.value
     setStatus(`Scala attiva: ${getScaleById(trigger.value).name}.`)
-    renderApp()
+    renderApp({ preserveFocus: true })
     return
   }
 
@@ -397,6 +465,22 @@ app.addEventListener('change', (event) => {
 
     updateFrequency(trigger.dataset.noteId, nextValue)
   }
+})
+
+app.addEventListener('input', (event) => {
+  const trigger = event.target
+
+  if (!trigger.matches('[data-role="frequency-input"]')) {
+    return
+  }
+
+  const nextValue = Number.parseFloat(trigger.value)
+
+  if (!Number.isFinite(nextValue) || nextValue <= 0) {
+    return
+  }
+
+  updateFrequency(trigger.dataset.noteId, nextValue)
 })
 
 renderApp()
